@@ -2369,7 +2369,6 @@ static int rog5_inbox_usb_probe(struct hid_device *hdev, const struct hid_device
 	printk("[ROG5_INBOX] hid->vendor  : 0x%4x\n", hdev->vendor);
 	printk("[ROG5_INBOX] hid->product : 0x%x\n", hdev->product);
 #if defined ASUS_ZS673KS_PROJECT || defined ASUS_PICASSO_PROJECT	
-	ASUSEvtlog("[ROG5_INBOX] rog5 inbox connect\n");
 #endif
 
 	drvdata = devm_kzalloc(&hdev->dev, sizeof(*drvdata), GFP_KERNEL);
@@ -2448,7 +2447,6 @@ static void rog5_inbox_usb_remove(struct hid_device *hdev)
 	}
 
 #if defined ASUS_ZS673KS_PROJECT || defined ASUS_PICASSO_PROJECT	
-	ASUSEvtlog("[ROG5_INBOX] rog5 inbox disconnect\n");
 #endif
 
 	sysfs_remove_group(&drvdata->led.dev->kobj, &pwm_attr_group);

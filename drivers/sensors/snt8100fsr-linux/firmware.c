@@ -299,7 +299,6 @@ static int open_firmware_file(struct upload_work *w) {
 	int ret = 0, i = 0;
 	PRINT_FUNC("0x%p", w);
 	if(g_Charger_mode) {
-		//ASUSEvtlog("[Grip] Sensor: Charger mode, don't load fw!!!");
 		return -1;
 	}
 	// If we haven't opened the firmware file, do so
@@ -320,7 +319,6 @@ static int open_firmware_file(struct upload_work *w) {
 		}
 	}
 	if(i > retry_times){
-		//ASUSEvtlog("[Grip] Sensor: can't find firmware file!!!");
 	}
 	return ret;
 }
@@ -712,7 +710,6 @@ cleanup:
 		start_event_processing(snt8100fsr_g);
 		PRINT_INFO("SUCESS to load fw");
 #ifdef GRIP_APPLY_ASUSEVTLOG
-		ASUSEvtlog("[Grip] Sensor: Load fw Success!!!\n");
 #endif
 		grip_input_event_report(8888, 0, 0, 0, 0, 0, 0);
 		snt8100fsr_g->fw_failed_count = 0;
@@ -723,7 +720,6 @@ cleanup:
 	}else{
 		PRINT_INFO("FAILED to load fw");
 #ifdef GRIP_APPLY_ASUSEVTLOG
-		ASUSEvtlog("[Grip] Sensor: Load fw fail!!!\n");
 #endif
 		grip_input_event_report(5566, 0, 0, 0, 0, 0, 0);
 		snt8100fsr_g->fw_failed_count++;
@@ -795,7 +791,6 @@ cleanup:
 	}else{
 		PRINT_INFO("FAILED to load fw");
 #ifdef GRIP_APPLY_ASUSEVTLOG
-		ASUSEvtlog("[Grip] Sensor: Retry Load fw fail!!!\n");
 #endif
 		grip_input_event_report(5566, 0, 0, 0, 0, 0, 0);
 		snt8100fsr_g->fw_failed_count++;

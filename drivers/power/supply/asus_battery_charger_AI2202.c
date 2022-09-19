@@ -2657,7 +2657,6 @@ static void print_battery_status(void) {
             charging_stats[charge_status],
             health_type[bat_health]);
 
-    // ASUSEvtlog("[BAT][Ser]%s", battInfo);
     pr_err("[BAT][Ser]%s", battInfo);
 
     schedule_delayed_work(&update_gauge_status_work, 60*HZ);

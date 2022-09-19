@@ -196,7 +196,6 @@ void Reset_Func(struct work_struct *work){
 	if(snt8100fsr_g->chip_reset_flag == GRIP_FW_DL_END){
 		PRINT_INFO("Starting chip reset");
 #ifdef GRIP_APPLY_ASUSEVTLOG
-		ASUSEvtlog("[Grip] Workaround : reset chip\n");
 #endif
 		snt8100fsr_g->chip_reset_flag = GRIP_RST_FW_DL;
 		snt8100fsr_g->grip_fw_loading_status = false; /* reset fw_loading status */
@@ -235,7 +234,6 @@ void check_stuck_semaphore(struct work_struct *work){
 			snt8100fsr_g->stuck_retry_count++;
 		}else{
 #ifdef GRIP_APPLY_ASUSEVTLOG
-			ASUSEvtlog("[Grip] driver is failed to wait semaphore due to non-wakeable chip\n"); 
 #endif
 			up(&snt8100fsr_g->wake_rsp);
 			if (down_trylock(&snt8100fsr_g->wake_req)){

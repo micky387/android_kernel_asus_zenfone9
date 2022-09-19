@@ -513,7 +513,6 @@ static void ufs_asusevent_log(struct ufs_hba *hba)
 		get_ufs_fw_version(hba, rev_buf, false);
 
 		//printk("[UFS] vendor: %s, ufs_version=%s, ufs_size=%sG, fw_version=%s, lifeA=0x%02x, lifeB=0x%02x, preEOL=0x%02x\n", ufs_vendor, ufs_spec_ver, hba->ufs_total_size, dev_info->version, pre_life_time_A, pre_life_time_B, pre_Pre_EOL);
-		//ASUSEvtlog("[UFS] vendor: %s, ufs_version=%s, ufs_size=%sG, fw_version=%s, lifeA=0x%02x, lifeB=0x%02x, preEOL=0x%02x\n", ufs_vendor, ufs_spec_ver, hba->ufs_total_size, dev_info->version, pre_life_time_A, pre_life_time_B, pre_Pre_EOL);
 		printk("[UFS] vendor: %s, ufs_version=%s, ufs_size=%sG, fw_version=%s, lifeA=0x%02x, lifeB=0x%02x, preEOL=0x%02x\n", ufs_vendor, ufs_spec_ver, host->ufs_info.ufs_total_size, rev_buf, pre_life_time_A, pre_life_time_B, pre_Pre_EOL);
 
 		init_ufs_health_flag = true;
@@ -521,7 +520,6 @@ static void ufs_asusevent_log(struct ufs_hba *hba)
 		if(pre_Pre_EOL != desc_buf[2] || pre_life_time_A != desc_buf[3] || pre_life_time_B != desc_buf[4]){	
 			
 			//printk("[UFS] vendor: %s, ufs_version=%s, ufs_size=%sG, fw_version=%s, lifeA=0x%02x, lifeB=0x%02x, preEOL=0x%02x\n", ufs_vendor, ufs_spec_ver, hba->ufs_total_size, dev_info->version, pre_life_time_A, pre_life_time_B, pre_Pre_EOL);
-			//ASUSEvtlog("[UFS] vendor: %s, ufs_version=%s, ufs_size=%sG, fw_version=%s, lifeA=0x%02x, lifeB=0x%02x, preEOL=0x%02x\n", ufs_vendor, ufs_spec_ver, hba->ufs_total_size, dev_info->version, pre_life_time_A, pre_life_time_B, pre_Pre_EOL);
 			printk("[UFS] vendor: %s, ufs_version=%s, ufs_size=%sG, fw_version=%s, lifeA=0x%02x, lifeB=0x%02x, preEOL=0x%02x\n", ufs_vendor, ufs_spec_ver, host->ufs_info.ufs_total_size, ufs_fw_rev, pre_life_time_A, pre_life_time_B, pre_Pre_EOL);
 
 			pre_Pre_EOL = desc_buf[2];

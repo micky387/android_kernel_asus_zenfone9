@@ -418,8 +418,6 @@ void pwr_press_workqueue(struct work_struct *work)
 	}else {
 		power_key_6s_running= 1;
 		if (voldown_key_6s_running ) {
-				ASUSEvtlog("ASDF: reset device after power press 8 sec \n");
-				ASUSEvtlog("[Reboot] Power key long press 8 sec\n");
 				msleep(200);
 				printk("force reset device!!\n");
 				kernel_restart("asus_force_reboot");
@@ -440,8 +438,6 @@ void volDown_press_workqueue(struct work_struct *work)
 	}else {
 		voldown_key_6s_running = 1;
 		if (power_key_6s_running ) {
-				ASUSEvtlog("ASDF: reset device after power press 8 sec \n");
-				ASUSEvtlog("[Reboot] Power key long press 8 sec\n");
 				msleep(200);
 				printk("force reset device!!\n");
 				kernel_restart("asus_force_reboot");

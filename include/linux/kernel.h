@@ -18,7 +18,6 @@
 #include <asm/byteorder.h>
 #include <asm/div64.h>
 #include <uapi/linux/kernel.h>
-#include <linux/asusdebug.h>
 
 #define STACK_MAGIC	0xdeadbeef
 

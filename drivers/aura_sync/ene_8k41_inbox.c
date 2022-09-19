@@ -622,9 +622,7 @@ static ssize_t mode_store(struct device *dev, struct device_attribute *attr, con
 
 	platform_data->current_mode = (u8)val;
 //	if(gDongleType == 1)
-//		ASUSEvtlog("[AURA_INBOX] current_mode : %d\n", platform_data->current_mode);
 //	else
-//		ASUSEvtlog("[AURA_DT] current_mode : %d\n", platform_data->current_mode);
 
 	mutex_unlock(&g_pdata->ene_mutex);
 	return count;

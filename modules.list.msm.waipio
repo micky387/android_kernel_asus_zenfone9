@@ -104,7 +104,6 @@ p73.ko
 sx932x_davinci.ko
 ms51_phone.ko
 gf_spi.ko
-asusdebug.ko
 qcom_aoss.ko
 msm_qmp.ko
 qcom_rimps.ko

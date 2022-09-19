@@ -751,7 +751,6 @@ static ssize_t mode_store(struct device *dev, struct device_attribute *attr, con
 	}
 
 	platform_data->current_mode = (u8)val;
-	//ASUSEvtlog("[AURA_SYNC] current_mode : %d\n", platform_data->current_mode);
 
 	mutex_unlock(&g_pdata->ene_mutex);
 

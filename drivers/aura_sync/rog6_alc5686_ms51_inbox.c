@@ -2865,7 +2865,6 @@ static int rog6_inbox_usb_probe(struct hid_device *hdev, const struct hid_device
 	printk("[ROG6_INBOX] hid->name : %s\n", hdev->name);
 	printk("[ROG6_INBOX] hid->vendor  : 0x%04x\n", hdev->vendor);
 	printk("[ROG6_INBOX] hid->product : 0x%02x\n", hdev->product);
-	//ASUSEvtlog("[ROG6_INBOX] Inbox connect\n");
 
 	drvdata = devm_kzalloc(&hdev->dev, sizeof(*drvdata), GFP_KERNEL);
 	if (drvdata == NULL) {
@@ -2956,7 +2955,6 @@ static void rog6_inbox_usb_remove(struct hid_device *hdev)
 
 	printk("[ROG6_INBOX] rog6_inbox_usb_remove\n");
 #if defined ASUS_AI2201_PROJECT || defined ASUS_AI2202_PROJECT
-	//ASUSEvtlog("[ROG6_INBOX] Inbox disconnect\n");
 	FANDG_USBID_detect = false;
 	FANDG_connect(0);
 #endif
