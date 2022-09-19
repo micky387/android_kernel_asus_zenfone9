@@ -66,7 +66,17 @@ append_cmd POST_DEFCONFIG_CMDS 'sanity_check_abi'
 
 function build_defconfig_fragments() {
 	if [[ "${VARIANT}" =~ ^(gki|consolidate)$ ]]; then
-		apply_defconfig_fragment ${KERNEL_DIR}/arch/${ARCH}/configs/vendor/${MSM_ARCH}_GKI.config vendor/${MSM_ARCH}-gki_defconfig
+		if [[ -n "$ASUS_BUILD_PROJECT" ]]; then
+			if [ "${TARGET_BUILD_VARIANT}" = eng ]; then
+				# Building the debug ASUS GKI configuration.
+				apply_defconfig_fragment ${KERNEL_DIR}/arch/${ARCH}/configs/vendor/${ASUS_BUILD_PROJECT}_GKI_debug.config vendor/${MSM_ARCH}-gki_defconfig
+			else
+				# Building the performance ASUS GKI configuration.
+				apply_defconfig_fragment ${KERNEL_DIR}/arch/${ARCH}/configs/vendor/${ASUS_BUILD_PROJECT}_perf.config vendor/${MSM_ARCH}-gki_defconfig
+			fi
+		else
+			apply_defconfig_fragment ${KERNEL_DIR}/arch/${ARCH}/configs/vendor/${MSM_ARCH}_GKI.config vendor/${MSM_ARCH}-gki_defconfig
+		fi
 		if [ "${VARIANT}" = gki ]; then
 			return
 		fi
@@ -75,7 +85,17 @@ function build_defconfig_fragments() {
 		# ABI comparison isn't applicable on consolidate variant
 		unset ABI_DEFINITION
 		apply_defconfig_fragment common/arch/${ARCH}/configs/consolidate.fragment consolidate_defconfig
-		apply_defconfig_fragment ${KERNEL_DIR}/arch/${ARCH}/configs/vendor/${MSM_ARCH}_consolidate.config vendor/${MSM_ARCH}-consolidate_defconfig
+		if [[ -n "$ASUS_BUILD_PROJECT" ]]; then
+			if [ "${TARGET_BUILD_VARIANT}" = eng ]; then
+				# Building the debug ASUS consolidate configurtation.
+				apply_defconfig_fragment ${KERNEL_DIR}/arch/${ARCH}/configs/vendor/${ASUS_BUILD_PROJECT}_debug.config vendor/${MSM_ARCH}-consolidate_defconfig
+			else
+				# Building the performance ASUS consolidate configurtation.
+				apply_defconfig_fragment ${KERNEL_DIR}/arch/${ARCH}/configs/vendor/${ASUS_BUILD_PROJECT}_perf.config vendor/${MSM_ARCH}-consolidate_defconfig
+			fi
+		else
+			apply_defconfig_fragment ${KERNEL_DIR}/arch/${ARCH}/configs/vendor/${MSM_ARCH}_consolidate.config vendor/${MSM_ARCH}-consolidate_defconfig
+		fi
 	elif [ "${VARIANT}" = gki-ack ]; then
 		# In gki-only, then using ACK's GKI config directly
 		. ${KERNEL_DIR}/build.config.gki
