@@ -18,6 +18,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/types.h>
 #include <linux/usb/repeater.h>
+#include <linux/usb/role.h>
 
 #define EUSB2_3P0_VOL_MIN			3075000 /* uV */
 #define EUSB2_3P0_VOL_MAX			3300000 /* uV */
@@ -66,6 +67,13 @@
 #define BC_STATUS_1			0xB7
 #define INT_STATUS_1			0xA3
 #define INT_STATUS_2			0xA4
+
+enum usb_role usb_current_role;
+
+void repeater_set_usb_role(enum usb_role role)
+{
+	usb_current_role = role;
+}EXPORT_SYMBOL_GPL(repeater_set_usb_role);
 
 enum eusb2_repeater_type {
 	TI_REPEATER,
@@ -350,6 +358,13 @@ static int eusb2_repeater_init(struct usb_repeater *ur)
 		eusb2_repeater_update_seq(er, er->param_override_seq,
 					er->param_override_seq_cnt);
 
+	if (usb_current_role == USB_ROLE_HOST) {
+		dev_info(er->ur.dev, "[eusb2_repeater] hardcode override host params\n", __func__);
+		eusb2_i2c_write_reg(er, USB2_TX_CONTROL1, 0x02); //0x07
+		eusb2_i2c_write_reg(er, USB2_TX_CONTROL2, 0x62); //0x08
+	}
+
+	dev_info(er->ur.dev, "[eusb2_repeater] dynamic override params\n", __func__);
 	if (er->override_RESET_CONTROL)//0x01
 		eusb2_i2c_write_reg(er, RESET_CONTROL, er->override_RESET_CONTROL);
 	if (er->override_LINK_CONTROL1)//0x02
@@ -373,7 +388,7 @@ static int eusb2_repeater_init(struct usb_repeater *ur)
 	if (er->override_VDX_CONTROL)//0x0E
 		eusb2_i2c_write_reg(er, VDX_CONTROL, er->override_VDX_CONTROL);
 
-	dev_info(er->ur.dev, "[eusb2_repeater] init\n");
+	dev_info(er->ur.dev, "[eusb2_repeater] init done\n");
 
 	return 0;
 }
