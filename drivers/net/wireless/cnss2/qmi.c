@@ -192,7 +192,8 @@ qmi_registered:
 static void cnss_wlfw_host_cap_parse_mlo(struct cnss_plat_data *plat_priv,
 					 struct wlfw_host_cap_req_msg_v01 *req)
 {
-	if (plat_priv->device_id == KIWI_DEVICE_ID) {
+	if (plat_priv->device_id == KIWI_DEVICE_ID ||
+	    plat_priv->device_id == MANGO_DEVICE_ID) {
 		req->mlo_capable_valid = 1;
 		req->mlo_capable = 1;
 		req->mlo_chip_id_valid = 1;
@@ -1178,7 +1179,8 @@ void cnss_get_qdss_cfg_filename(struct cnss_plat_data *plat_priv,
 	char filename_tmp[MAX_FIRMWARE_NAME_LEN];
 	char *debug_str = QDSS_DEBUG_FILE_STR;
 
-	if (plat_priv->device_id == KIWI_DEVICE_ID)
+	if (plat_priv->device_id == KIWI_DEVICE_ID ||
+	    plat_priv->device_id == MANGO_DEVICE_ID)
 		debug_str = "";
 
 	if (plat_priv->device_version.major_version == FW_V2_NUMBER)
@@ -1530,7 +1532,8 @@ int cnss_wlfw_wlan_cfg_send_sync(struct cnss_plat_data *plat_priv,
 		req->svc_cfg[i].pipe_num = config->ce_svc_cfg[i].pipe_num;
 	}
 
-	if (plat_priv->device_id != KIWI_DEVICE_ID) {
+	if (plat_priv->device_id != KIWI_DEVICE_ID &&
+	    plat_priv->device_id != MANGO_DEVICE_ID) {
 		req->shadow_reg_v2_valid = 1;
 		if (config->num_shadow_reg_v2_cfg >
 		    QMI_WLFW_MAX_NUM_SHADOW_REG_V2_V01)
@@ -1542,14 +1545,17 @@ int cnss_wlfw_wlan_cfg_send_sync(struct cnss_plat_data *plat_priv,
 		       sizeof(struct wlfw_shadow_reg_v2_cfg_s_v01)
 		       * req->shadow_reg_v2_len);
 	} else {
-		cnss_pr_dbg("Shadow reg v3 len: %d\n",
-			    config->num_shadow_reg_v3_cfg);
 		req->shadow_reg_v3_valid = 1;
 		if (config->num_shadow_reg_v3_cfg >
 		    MAX_NUM_SHADOW_REG_V3)
 			req->shadow_reg_v3_len = MAX_NUM_SHADOW_REG_V3;
 		else
 			req->shadow_reg_v3_len = config->num_shadow_reg_v3_cfg;
+
+		plat_priv->num_shadow_regs_v3 = req->shadow_reg_v3_len;
+
+		cnss_pr_dbg("Shadow reg v3 len: %d\n",
+			    plat_priv->num_shadow_regs_v3);
 
 		memcpy(req->shadow_reg_v3, config->shadow_reg_v3_cfg,
 		       sizeof(struct wlfw_shadow_reg_v3_cfg_s_v01)
