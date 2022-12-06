@@ -692,6 +692,11 @@ static int cnss_fw_ready_hdlr(struct cnss_plat_data *plat_priv)
 	if (!plat_priv)
 		return -ENODEV;
 
+	if (test_bit(CNSS_IN_REBOOT, &plat_priv->driver_state)) {
+		cnss_pr_err("Reboot is in progress, ignore FW ready\n");
+		return -EINVAL;
+	}
+
 	cnss_pr_dbg("Processing FW Init Done..\n");
 	del_timer(&plat_priv->fw_boot_timer);
 	set_bit(CNSS_FW_READY, &plat_priv->driver_state);
@@ -2760,6 +2765,7 @@ int cnss_register_ramdump(struct cnss_plat_data *plat_priv)
 	case QCA6390_DEVICE_ID:
 	case QCA6490_DEVICE_ID:
 	case KIWI_DEVICE_ID:
+	case MANGO_DEVICE_ID:
 		ret = cnss_register_ramdump_v2(plat_priv);
 		break;
 	default:
@@ -2780,6 +2786,7 @@ void cnss_unregister_ramdump(struct cnss_plat_data *plat_priv)
 	case QCA6390_DEVICE_ID:
 	case QCA6490_DEVICE_ID:
 	case KIWI_DEVICE_ID:
+	case MANGO_DEVICE_ID:
 		cnss_unregister_ramdump_v2(plat_priv);
 		break;
 	default:
@@ -3188,6 +3195,7 @@ static ssize_t fs_ready_store(struct device *dev,
 	case QCA6390_DEVICE_ID:
 	case QCA6490_DEVICE_ID:
 	case KIWI_DEVICE_ID:
+	case MANGO_DEVICE_ID:
 		break;
 	default:
 		cnss_pr_err("Not supported for device ID 0x%lx\n",
@@ -3442,7 +3450,9 @@ static int cnss_misc_init(struct cnss_plat_data *plat_priv)
 		cnss_pr_err("QMI IPC connection call back register failed, err = %d\n",
 			    ret);
 
-	plat_priv->sram_dump = kcalloc(SRAM_DUMP_SIZE, 1, GFP_KERNEL);
+	if (plat_priv->device_id == QCA6490_DEVICE_ID &&
+	    cnss_get_host_build_type() == QMI_HOST_BUILD_TYPE_PRIMARY_V01)
+		plat_priv->sram_dump = kcalloc(SRAM_DUMP_SIZE, 1, GFP_KERNEL);
 
 	return 0;
 }
@@ -3519,6 +3529,7 @@ static const struct platform_device_id cnss_platform_id_table[] = {
 	{ .name = "qca6390", .driver_data = QCA6390_DEVICE_ID, },
 	{ .name = "qca6490", .driver_data = QCA6490_DEVICE_ID, },
 	{ .name = "kiwi", .driver_data = KIWI_DEVICE_ID, },
+	{ .name = "mango", .driver_data = MANGO_DEVICE_ID, },
 	{ },
 };
 
@@ -3538,6 +3549,9 @@ static const struct of_device_id cnss_of_match_table[] = {
 	{
 		.compatible = "qcom,cnss-kiwi",
 		.data = (void *)&cnss_platform_id_table[4]},
+	{
+		.compatible = "qcom,cnss-mango",
+		.data = (void *)&cnss_platform_id_table[5]},
 	{ },
 };
 MODULE_DEVICE_TABLE(of, cnss_of_match_table);
@@ -3620,6 +3634,7 @@ static int cnss_probe(struct platform_device *plat_dev)
 	plat_priv->device_id = device_id->driver_data;
 	plat_priv->bus_type = cnss_get_bus_type(plat_priv->device_id);
 	plat_priv->use_nv_mac = cnss_use_nv_mac(plat_priv);
+	plat_priv->driver_mode = CNSS_DRIVER_MODE_MAX;
 	plat_priv->use_fw_path_with_prefix =
 		cnss_use_fw_path_with_prefix(plat_priv);
 	cnss_set_plat_priv(plat_dev, plat_priv);

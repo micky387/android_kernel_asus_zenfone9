@@ -53,6 +53,7 @@
 #include "debug-ipc.h"
 
 #define NUM_LOG_PAGES   12
+#define DWC3_MINIDUMP	0x10000
 
 /* time out to wait for USB cable status notification (in ms)*/
 #define SM_INIT_TIMEOUT 30000
@@ -322,6 +323,12 @@ static const char *const usb_dr_modes[] = {
 	[USB_DR_MODE_HOST]		= "host",
 	[USB_DR_MODE_PERIPHERAL]	= "peripheral",
 	[USB_DR_MODE_OTG]		= "otg",
+};
+
+enum dp_lane {
+	DP_NONE = 0,
+	DP_2_LANE = 2,
+	DP_4_LANE = 4,
 };
 
 static const char *dwc3_drd_state_string(enum dwc3_drd_state state)
@@ -635,6 +642,8 @@ struct dwc3_msm {
 	bool			dis_sending_cm_l1_quirk;
 	bool			use_eusb2_phy;
 	bool			force_gen1;
+	int			refcnt_dp_usb;
+	enum dp_lane		dp_state;
 };
 
 #define USB_HSPHY_3P3_VOL_MIN		3050000 /* uV */
@@ -4413,7 +4422,7 @@ static int dwc3_msm_vbus_notifier(struct notifier_block *nb,
 		 * HS path.  Only listen for if there are spoof
 		 * connect/disconnect commands.
 		 */
-		if (dwc && dwc->gadget->speed >= USB_SPEED_SUPER && !spoof)
+		if (dwc && dwc->gadget && dwc->gadget->speed >= USB_SPEED_SUPER && !spoof)
 			return NOTIFY_DONE;
 
 		mdwc->check_eud_state = true;
@@ -4800,8 +4809,8 @@ static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role)
 	mutex_lock(&mdwc->role_switch_mutex);
 	cur_role = dwc3_msm_get_role(mdwc);
 
-	dbg_log_string("cur_role:%s new_role:%s\n", usb_role_string(cur_role),
-						usb_role_string(role));
+	dbg_log_string("cur_role:%s new_role:%s refcnt:%d\n", usb_role_string(cur_role),
+				usb_role_string(role), mdwc->refcnt_dp_usb);
 
 	dev_info(mdwc->dev, "[USB] %s cur_role:%s new_role:%s\n", __func__, usb_role_string(cur_role),
 						usb_role_string(role));
@@ -4827,11 +4836,15 @@ static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role)
 		usb_path_switch(SIDE);
 		side_connected = 1;
 #endif
+		WARN_ON(mdwc->refcnt_dp_usb);
+		mdwc->refcnt_dp_usb++;
 		break;
 
 	case USB_ROLE_DEVICE:
 		mdwc->vbus_active = true;
 		mdwc->id_state = DWC3_ID_FLOAT;
+		dbg_log_string("refcnt:%d reset refcnt_dp_usb\n", mdwc->refcnt_dp_usb);
+		mdwc->refcnt_dp_usb = 0;
 #ifdef CONFIG_USB_HUB_USB3803_MODULE
 		usb_path_switch(SIDE);
 		side_connected = 1;
@@ -4846,14 +4859,25 @@ static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role)
 			return 0;
 		}
 #endif
+		if (mdwc->dp_state != DP_NONE) {
+			mdwc->refcnt_dp_usb--;
+			dbg_log_string("DP (%d)session active, refcnt:%d\n",
+					mdwc->dp_state, mdwc->refcnt_dp_usb);
+			mutex_unlock(&mdwc->role_switch_mutex);
+			return 0;
+		}
+
 		mdwc->vbus_active = false;
 		mdwc->id_state = DWC3_ID_FLOAT;
+		mdwc->refcnt_dp_usb = 0;
 #ifdef CONFIG_USB_HUB_USB3803_MODULE
 		side_connected = 0;
 		restore_role_path();
 #endif
 		break;
 	}
+	dbg_log_string("new_role:%s refcnt:%d\n",
+		usb_role_string(role), mdwc->refcnt_dp_usb);
 	mutex_unlock(&mdwc->role_switch_mutex);
 
 	/*
@@ -4878,6 +4902,7 @@ static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role)
 	dwc3_ext_event_notify(mdwc);
 	return 0;
 }
+
 
 static int cc_enable = 1;
 static ssize_t ccenable_show(struct device *dev,
@@ -5332,6 +5357,7 @@ static int dwc3_start_stop_device(struct dwc3_msm *mdwc, bool start)
 
 static void dwc3_msm_clear_dp_only_params(struct dwc3_msm *mdwc)
 {
+	dbg_log_string("resetting params for USB ss\n");
 	mdwc->ss_release_called = false;
 	mdwc->ss_phy->flags &= ~PHY_DP_MODE;
 	dwc3_msm_set_max_speed(mdwc, USB_SPEED_UNKNOWN);
@@ -5366,9 +5392,17 @@ int dwc3_msm_set_dp_mode(struct device *dev, bool dp_connected, int lanes)
 	flush_work(&mdwc->resume_work);
 	flush_workqueue(mdwc->sm_usb_wq);
 
-	if (!dp_connected) {
-		dbg_event(0xFF, "DP not connected", 0);
+	dbg_log_string("DP: cur_state:%d new_state:%d lanes:%d\n",
+				mdwc->dp_state, dp_connected, lanes);
+	if (dp_connected && (lanes == mdwc->dp_state)) {
+		dbg_log_string("DP lane already configured\n");
+		return 0;
+	}
 
+	if (!dp_connected) {
+		dbg_log_string("DP not connected, refcnt:%d\n", mdwc->refcnt_dp_usb);
+
+		mutex_lock(&mdwc->role_switch_mutex);
 		mdwc->ss_release_called = false;
 		/*
 		 * Special case for HOST mode, as we need to ensure that the DWC3
@@ -5376,19 +5410,27 @@ int dwc3_msm_set_dp_mode(struct device *dev, bool dp_connected, int lanes)
 		 * This is because, dwc3_gadget_init() will set the max speed
 		 * for the USB gadget driver.
 		 */
-		if (mdwc->drd_state == DRD_STATE_HOST)
-			dwc3_start_stop_host(mdwc, false);
-		else
+		mdwc->refcnt_dp_usb--;
+		mdwc->dp_state = DP_NONE;
+		if (mdwc->drd_state == DRD_STATE_HOST) {
+			if (!mdwc->refcnt_dp_usb)
+				dwc3_start_stop_host(mdwc, false);
+		} else {
 			dwc3_msm_clear_dp_only_params(mdwc);
+		}
 
 		mdwc->ss_phy->flags &= ~PHY_USB_DP_CONCURRENT_MODE;
-
+		mutex_unlock(&mdwc->role_switch_mutex);
 		return 0;
 	}
 
-	dbg_event(0xFF, "Set DP mode", lanes);
+	dbg_log_string("Set DP lanes:%d refcnt:%d\n", lanes, mdwc->refcnt_dp_usb);
 
 	if (lanes == 2) {
+		mutex_lock(&mdwc->role_switch_mutex);
+		mdwc->dp_state = DP_2_LANE;
+		mdwc->refcnt_dp_usb++;
+		mutex_unlock(&mdwc->role_switch_mutex);
 		pm_runtime_get_sync(&mdwc->dwc3->dev);
 		mdwc->ss_phy->flags |= PHY_USB_DP_CONCURRENT_MODE;
 		pm_runtime_put_sync(&mdwc->dwc3->dev);
@@ -5398,6 +5440,11 @@ int dwc3_msm_set_dp_mode(struct device *dev, bool dp_connected, int lanes)
 	redriver_release_usb_lanes(mdwc->ss_redriver_node);
 
 	mutex_lock(&mdwc->role_switch_mutex);
+	/* 4 lanes handling */
+	if (mdwc->dp_state != DP_2_LANE)
+		mdwc->refcnt_dp_usb++;
+
+	mdwc->dp_state = DP_4_LANE;
 	if (mdwc->id_state == DWC3_ID_GROUND) {
 		/* stop USB host mode */
 		ret = dwc3_start_stop_host(mdwc, false);
@@ -5441,21 +5488,21 @@ static int dwc3_msm_debug_init(struct dwc3_msm *mdwc)
 	char ipc_log_ctx_name[40];
 
 	mdwc->dwc_ipc_log_ctxt = ipc_log_context_create(NUM_LOG_PAGES,
-					dev_name(mdwc->dev), 0);
+					dev_name(mdwc->dev), DWC3_MINIDUMP);
 	if (!mdwc->dwc_ipc_log_ctxt)
 		dev_err(mdwc->dev, "Error getting ipc_log_ctxt\n");
 
 	snprintf(ipc_log_ctx_name, sizeof(ipc_log_ctx_name),
 				"%s.ep_events", dev_name(mdwc->dev));
 	mdwc->dwc_dma_ipc_log_ctxt = ipc_log_context_create(2 * NUM_LOG_PAGES,
-					ipc_log_ctx_name, 0);
+					ipc_log_ctx_name, DWC3_MINIDUMP);
 	if (!mdwc->dwc_dma_ipc_log_ctxt)
 		dev_err(mdwc->dev, "Error getting ipc_log_ctxt for ep_events\n");
 
 	snprintf(ipc_log_ctx_name, sizeof(ipc_log_ctx_name),
 				"%s.trace", dev_name(mdwc->dev));
 	dwc_trace_ipc_log_ctxt = ipc_log_context_create(3 * NUM_LOG_PAGES,
-					ipc_log_ctx_name, 0);
+					ipc_log_ctx_name, DWC3_MINIDUMP);
 	if (!dwc_trace_ipc_log_ctxt)
 		dev_err(mdwc->dev, "Error getting trace_ipc_log_ctxt for ep_events\n");
 
@@ -6217,8 +6264,8 @@ static int dwc3_msm_host_ss_powerup(struct dwc3_msm *mdwc)
 {
 	u32 reg;
 
-	dev_info(mdwc->dev, "[USB] %s\n", __func__);
-	if (mdwc->disable_host_ssphy_powerdown)
+	dbg_log_string("start: speed:%d\n", dwc3_msm_get_max_speed(mdwc));
+	if (!mdwc->in_host_mode || mdwc->disable_host_ssphy_powerdown)
 		return 0;
 
 	usb_phy_set_suspend(mdwc->ss_phy, 0);
@@ -6361,11 +6408,14 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 	if (on) {
 		dev_info(mdwc->dev, "[USB] %s: turn on host\n", __func__);
 		mdwc->hs_phy->flags |= PHY_HOST_MODE;
-		dbg_event(0xFF, "hs_phy_flag:%x", mdwc->hs_phy->flags);
+		dbg_event(0xFF, "hs_phy_flag:", mdwc->hs_phy->flags);
 		pm_runtime_get_sync(mdwc->dev);
 		dbg_event(0xFF, "StrtHost gync",
 			atomic_read(&mdwc->dev->power.usage_count));
-		redriver_notify_connect(mdwc->ss_redriver_node);
+		redriver_notify_connect(mdwc->ss_redriver_node,
+			mdwc->orientation_override ?
+				(mdwc->orientation_override == PHY_LANE_A ?
+					ORIENTATION_CC1 : ORIENTATION_CC2) : ORIENTATION_UNKNOWN);
 		clk_set_rate(mdwc->core_clk, mdwc->core_clk_rate);
 		dwc3_msm_set_clk_sel(mdwc);
 		dev_info(mdwc->dev, "[USB] %s: max_speed=%d\n", __func__, dwc->maximum_speed);
@@ -6475,6 +6525,8 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 		 * reset before dwc3_gadget_init() is called.  Otherwise, USB
 		 * gadget will be set to HS only.
 		 */
+		mdwc->in_host_mode = false;
+
 		if (!mdwc->ss_release_called) {
 			if (dwc3_msm_get_max_speed(mdwc) >= USB_SPEED_SUPER)
 				dwc3_msm_host_ss_powerup(mdwc);
@@ -6498,7 +6550,6 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 
 		dwc3_msm_write_reg_field(mdwc->base, DWC3_GUSB3PIPECTL(0),
 				DWC3_GUSB3PIPECTL_SUSPHY, 0);
-		mdwc->in_host_mode = false;
 
 		/* wait for LPM, to ensure h/w is reset after stop_host */
 		set_bit(WAIT_FOR_LPM, &mdwc->inputs);
@@ -6542,6 +6593,7 @@ static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on)
 	struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
 	int timeout = 1000;
 	int ret;
+	u32 reg = 0;
 
 	pm_runtime_get_sync(mdwc->dev);
 	dbg_event(0xFF, "StrtGdgt gsync",
@@ -6559,10 +6611,23 @@ static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on)
 		 */
 		if (dwc->dr_mode == USB_DR_MODE_OTG)
 			flush_work(&dwc->drd_work);
+
+		/*
+		 * For DRD controllers, GUSB3PIPECTL.SUSPENDENABLE must be cleared
+		 * after power-on reset, and it can be set after core
+		 * initialization. Hence, it is cleared at dwc3_phy_setup and set
+		 * here.
+		 */
+		reg = dwc3_msm_read_reg(mdwc->base, DWC3_GUSB3PIPECTL(0));
+		reg |= DWC3_GUSB3PIPECTL_SUSPHY;
+		dwc3_msm_write_reg(mdwc->base, DWC3_GUSB3PIPECTL(0), reg);
 		dwc3_msm_notify_event(dwc, DWC3_GSI_EVT_BUF_SETUP, 0);
 
 		dwc3_override_vbus_status(mdwc, true);
-		redriver_notify_connect(mdwc->ss_redriver_node);
+		redriver_notify_connect(mdwc->ss_redriver_node,
+			mdwc->orientation_override ?
+				(mdwc->orientation_override == PHY_LANE_A ?
+					ORIENTATION_CC1 : ORIENTATION_CC2) : ORIENTATION_UNKNOWN);
 		usb_phy_notify_connect(mdwc->hs_phy, USB_SPEED_HIGH);
 		usb_phy_notify_connect(mdwc->ss_phy, USB_SPEED_SUPER);
 
@@ -6617,13 +6682,13 @@ static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on)
 
 		/*
 		 * DWC3 core runtime PM may return an error during the put sync
-		 * and nothing else can trigger idle after this point.  If EBUSY
-		 * is detected (i.e. dwc->connected == TRUE) then wait for the
-		 * connected flag to turn FALSE (set to false during disconnect
-		 * or pullup disable), and retry suspend again.
+		 * and nothing else can trigger idle after this point.  If any
+		 * error condition is detected then  wait for the connected flag
+		 * to turn FALSE (set to false during disconnect or pullup
+		 * disable), and retry suspend again.
 		 */
 		ret = pm_runtime_put_sync(&mdwc->dwc3->dev);
-		if (ret == -EBUSY) {
+		if (ret < 0) {
 			while (--timeout && dwc->connected)
 				msleep(20);
 			dbg_event(0xFF, "StopGdgt connected", dwc->connected);
@@ -6983,6 +7048,11 @@ static void dwc3_core_complete(struct device *dev)
 	 * to cable status, or XHCI status to wake up the DWC3 core.
 	 */
 	dbg_event(0xFF, "Core PM complete", dev->power.direct_complete);
+
+	if (!mdwc->in_host_mode) {
+		dbg_event(0xFF, "Queue ResWrk", 0);
+		queue_work(mdwc->dwc3_wq, &mdwc->resume_work);
+	}
 }
 #endif
 
