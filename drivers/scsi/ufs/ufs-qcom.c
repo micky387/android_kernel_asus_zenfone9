@@ -5202,6 +5202,7 @@ static int ufshcd_pltfrm_suspend_wrapper(struct device *dev)
 	return ufshcd_pltfrm_suspend(dev);
 }
 
+#ifndef CONFIG_SCSI_UFS_ASUS
 static int ufshcd_pltfrm_resume_wrapper(struct device *dev)
 {
 	struct ufs_hba *hba = dev_get_drvdata(dev);
@@ -5212,6 +5213,7 @@ static int ufshcd_pltfrm_resume_wrapper(struct device *dev)
 	}
 	return ufshcd_pltfrm_resume(dev);
 }
+#endif
 
 static const struct dev_pm_ops ufs_qcom_pm_ops = {
 	.suspend	= ufshcd_pltfrm_suspend_wrapper,
