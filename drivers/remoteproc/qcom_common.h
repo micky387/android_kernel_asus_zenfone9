@@ -48,6 +48,7 @@ struct qcom_ssr_subsystem;
 
 struct qcom_rproc_ssr {
 	struct rproc_subdev subdev;
+	bool is_notified;
 	enum qcom_ssr_notify_type notification;
 	struct timer_list timer;
 	struct qcom_ssr_subsystem *info;
@@ -86,11 +87,19 @@ int qcom_sysmon_get_reason(struct qcom_sysmon *sysmon, char *buf, size_t len);
 
 extern void subsys_save_reason(const char *name, char *reason);/*AS-K ASUS SSR and Debug+*/
 
+void qcom_sysmon_register_ssr_subdev(struct qcom_sysmon *sysmon,
+				struct rproc_subdev *ssr_subdev);
 #else
 static inline void subsys_save_reason(const char *name, char *reason)/*AS-K ASUS SSR and Debug+*/
 {
 	return;
 }
+
+static inline void qcom_sysmon_register_ssr_subdev(struct qcom_sysmon *sysmon,
+				struct rproc_subdev *ssr_subdev)
+{
+}
+
 static inline struct qcom_sysmon *qcom_add_sysmon_subdev(struct rproc *rproc,
 							 const char *name,
 							 int ssctl_instance)

@@ -49,7 +49,7 @@ obj-$(CONFIG_SRAM)		+= sram.o
 obj-$(CONFIG_SRAM_EXEC)		+= sram-exec.o
 obj-$(CONFIG_GENWQE)		+= genwqe/
 obj-$(CONFIG_ECHO)		+= echo/
-obj-$(CONFIG_HDCP_QSEECOM)	+= hdcp_qseecom.o
+obj-$(CONFIG_HDCP_QSEECOM)	+= hdcp/
 obj-$(CONFIG_CXL_BASE)		+= cxl/
 obj-$(CONFIG_PCI_ENDPOINT_TEST)	+= pci_endpoint_test.o
 obj-$(CONFIG_OCXL)		+= ocxl/
@@ -69,3 +69,4 @@ obj-$(CONFIG_RT_REGMAP)		+= rt-regmap.o
 ifneq (,$(filter AI2201,$(ASUS_BUILD_PROJECT)))
 obj-y		+= audio_gm_cdev.o
 endif
+obj-$(CONFIG_KINECTICS_XR_NORDIC) += kxrctrl/
