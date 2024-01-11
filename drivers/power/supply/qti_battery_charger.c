@@ -2570,12 +2570,6 @@ static int battery_chg_remove(struct platform_device *pdev)
 	asuslib_deinit();//ASUS_BSP : Add for sub-function
 #endif
 
-	rc = pmic_glink_unregister_client(bcdev->client);
-	if (rc < 0) {
-		pr_err("Error unregistering from pmic_glink, rc=%d\n", rc);
-		return rc;
-	}
-
 	return 0;
 }
 
