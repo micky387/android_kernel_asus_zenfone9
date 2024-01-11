@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0-only
+obj-y                           += ASH/
+
+ifneq (,$(filter AI2201,$(ASUS_BUILD_PROJECT)))
+KBUILD_CFLAGS += -DONE_PL_CHIP
+KBUILD_CFLAGS += -DALSP_GPIO_NO_PULL
+else
+KBUILD_CFLAGS += -DCONFIG_TMD2755_FLAG=1
+KBUILD_CFLAGS += -DONE_PL_CHIP
+KBUILD_CFLAGS += -DPSENSOR_CAL24
+endif

@@ -393,6 +393,11 @@ struct power_supply_battery_info {
 	ANDROID_KABI_RESERVE(1);
 };
 
+//ASUS_BSP +++ 
+#define QTI_POWER_SUPPLY_CHARGED   0x0001
+#define QTI_POWER_SUPPLY_UNCHARGED 0x0002
+//ASUS_BSP ---
+
 extern struct atomic_notifier_head power_supply_notifier;
 extern int power_supply_reg_notifier(struct notifier_block *nb);
 extern void power_supply_unreg_notifier(struct notifier_block *nb);
