@@ -1388,6 +1388,7 @@ static int qcom_slim_ngd_exit_dma(struct qcom_slim_ngd_ctrl *ctrl)
 	int size;
 
 	SLIM_INFO(ctrl, "SLIM: NGD exit dma\n");
+	mutex_lock(&ctrl->ssr_lock);
 	if (ctrl->dma_rx_channel) {
 		dmaengine_terminate_sync(ctrl->dma_rx_channel);
 		dma_release_channel(ctrl->dma_rx_channel);
@@ -1409,6 +1410,7 @@ static int qcom_slim_ngd_exit_dma(struct qcom_slim_ngd_ctrl *ctrl)
 	}
 
 	ctrl->dma_tx_channel = ctrl->dma_rx_channel = NULL;
+	mutex_unlock(&ctrl->ssr_lock);
 
 	return 0;
 }
@@ -1764,9 +1766,9 @@ static int qcom_slim_ngd_ssr_pdr_notify(struct qcom_slim_ngd_ctrl *ctrl,
 			pm_runtime_get_noresume(ctrl->ctrl.dev);
 			SLIM_INFO(ctrl, "SLIM %s: PM get_no_resume count:%d\n",
 				__func__, atomic_read(&ctrl->ctrl.dev->power.usage_count));
-			ctrl->state = QCOM_SLIM_NGD_CTRL_DOWN;
 			qcom_slim_ngd_down(ctrl);
 			qcom_slim_ngd_exit_dma(ctrl);
+			ctrl->state = QCOM_SLIM_NGD_CTRL_DOWN;
 			SLIM_INFO(ctrl, "SLIM SSR down\n");
 		}
 		mutex_unlock(&ctrl->tx_lock);
@@ -1895,11 +1897,6 @@ static int qcom_slim_ngd_probe(struct platform_device *pdev)
 	pm_runtime_get_noresume(dev);
 	SLIM_INFO(ctrl, "SLIM %s:PM get_noresume count:%d\n", __func__,
 		atomic_read(&ctrl->ctrl.dev->power.usage_count));
-	ret = qcom_slim_ngd_qmi_svc_event_init(ctrl);
-	if (ret) {
-		dev_err(&pdev->dev, "QMI service registration failed:%d", ret);
-		goto err;
-	}
 
 	INIT_WORK(&ctrl->m_work, qcom_slim_ngd_master_worker);
 	INIT_WORK(&ctrl->ngd_up_work, qcom_slim_ngd_up_worker);
@@ -1908,6 +1905,12 @@ static int qcom_slim_ngd_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to start master worker\n");
 		ret = -ENOMEM;
 		goto wq_err;
+	}
+	ret = qcom_slim_ngd_qmi_svc_event_init(ctrl);
+	if (ret) {
+		dev_err(&pdev->dev,
+			"QMI service registration failed:%d\n", ret);
+		goto err;
 	}
 
 	return 0;

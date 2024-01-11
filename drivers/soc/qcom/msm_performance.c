@@ -412,7 +412,7 @@ static int freq_qos_request_init(void)
 			goto cleanup;
 		}
 
-		per_cpu(msm_perf_cpu_stats, cpu).max = UINT_MAX;
+		per_cpu(msm_perf_cpu_stats, cpu).max = FREQ_QOS_MAX_DEFAULT_VALUE;
 		req = &per_cpu(qos_req_max, cpu);
 		ret = freq_qos_add_request(&policy->constraints, req,
 			FREQ_QOS_MAX, FREQ_QOS_MAX_DEFAULT_VALUE);
@@ -439,7 +439,7 @@ cleanup:
 			freq_qos_remove_request(req);
 
 		per_cpu(msm_perf_cpu_stats, cpu).min = 0;
-		per_cpu(msm_perf_cpu_stats, cpu).max = UINT_MAX;
+		per_cpu(msm_perf_cpu_stats, cpu).max = FREQ_QOS_MAX_DEFAULT_VALUE;
 	}
 	return ret;
 }
@@ -1255,7 +1255,7 @@ static void gfx_data_notify_cpucp(struct work_struct *dummy)
 	curr_pos.tail = (curr_pos.tail + size) % QUEUE_POOL_SIZE;
 	spin_unlock_irqrestore(&gfx_circ_buff_lock, flags);
 
-	for (idx = 0; idx < size; idx++) {
+	for (idx = 0; idx < size && j < GPLAF_ELEM_SIZE - MAX_GFX_STR_ELEMENTS - 1; idx++) {
 		act_idx = (updated_pos.tail + idx) % QUEUE_POOL_SIZE;
 
 		gfx_data[++j] = gpu_circ_buff[act_idx].pid;
@@ -1721,7 +1721,7 @@ static int init_lplh_notif(const char *buf)
 		cp++;
 		cp = strnchr(cp, strlen(cp), ':');	/* skip nClusters */
 		cp++;
-		if (!strlen(cp))
+		if (!cp || !strlen(cp))
 			return -EINVAL;
 
 		for (i = 0; i < nClusters; i++) {
@@ -1752,7 +1752,7 @@ static int init_lplh_notif(const char *buf)
 				total_tokens++;
 				for (j = 0; j < nValues / 2; j++) {
 					value = 0;
-					if (sscanf(token, ",%hu", &value) != 1)
+					if (!token || sscanf(token, ",%hu", &value) != 1)
 						return -EINVAL;
 
 					*ptmp++ = value;
@@ -1762,7 +1762,7 @@ static int init_lplh_notif(const char *buf)
 						return -EINVAL;
 
 					token = strnchr(token, strlen(token), ',');
-					if (sscanf(token, ",%hu", &value) != 1)
+					if (!token || sscanf(token, ",%hu", &value) != 1)
 						return -EINVAL;
 
 					*ptmp++ = value;

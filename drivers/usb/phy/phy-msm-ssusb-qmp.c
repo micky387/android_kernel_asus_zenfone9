@@ -49,6 +49,8 @@ enum core_ldo_levels {
 #define SW_PORTSELECT		BIT(0)
 /* port select mux: 1 - sw control. 0 - HW control*/
 #define SW_PORTSELECT_MX	BIT(1)
+/* port select polarity: 1 - invert polarity of portselect from gpio */
+#define PORTSELECT_POLARITY	BIT(2)
 
 /* USB3_DP_PHY_USB3_DP_COM_SWI_CTRL bits */
 
@@ -104,7 +106,6 @@ enum qmp_phy_type {
 struct qmp_reg_val {
 	u32 offset;
 	u32 val;
-	u32 delay;
 };
 
 struct msm_ssphy_qmp {
@@ -140,6 +141,7 @@ struct msm_ssphy_qmp {
 	int			reg_offset_cnt;
 	u32			*qmp_phy_init_seq;
 	int			init_seq_len;
+	bool			invert_ps_polarity;
 	enum qmp_phy_type	phy_type;
 };
 
@@ -362,16 +364,15 @@ static int configure_phy_regs(struct usb_phy *uphy,
 {
 	struct msm_ssphy_qmp *phy = container_of(uphy, struct msm_ssphy_qmp,
 					phy);
+	int i;
 
 	if (!reg) {
 		dev_err(uphy->dev, "NULL PHY configuration\n");
 		return -EINVAL;
 	}
 
-	while (reg->offset != -1) {
+	for (i = 0; i < phy->init_seq_len/2; i++) {
 		writel_relaxed(reg->val, phy->base + reg->offset);
-		if (reg->delay)
-			usleep_range(reg->delay, reg->delay + 10);
 		reg++;
 	}
 	return 0;
@@ -404,6 +405,14 @@ static void usb_qmp_update_portselect_phymode(struct msm_ssphy_qmp *phy)
 
 	switch (phy->phy_type) {
 	case USB3_AND_DP:
+		/*
+		 * if port select inversion is enabled, enable it only for the input to the PHY.
+		 * The lane selection based on PHY flags will not get affected.
+		 */
+		if (val < 0 && phy->invert_ps_polarity)
+			writel_relaxed(PORTSELECT_POLARITY,
+				phy->base + phy->phy_reg[USB3_DP_COM_TYPEC_CTRL]);
+
 		writel_relaxed(0x01,
 			phy->base + phy->phy_reg[USB3_DP_COM_SW_RESET]);
 		writel_relaxed(0x00,
@@ -1126,6 +1135,9 @@ static int msm_ssphy_qmp_probe(struct platform_device *pdev)
 		}
 		dev_err(dev, "usb3_dp_phy_gdsc optional regulator missing\n");
 	}
+
+	phy->invert_ps_polarity = of_property_read_bool(dev->of_node,
+					"qcom,invert-ps-polarity");
 
 	platform_set_drvdata(pdev, phy);
 

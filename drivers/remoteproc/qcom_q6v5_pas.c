@@ -5,6 +5,7 @@
  * Copyright (C) 2016 Linaro Ltd
  * Copyright (C) 2014 Sony Mobile Communications AB
  * Copyright (c) 2012-2013, 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk.h>
@@ -14,6 +15,8 @@
 #include <linux/module.h>
 #include <linux/of_address.h>
 #include <linux/of_device.h>
+#include <linux/of_reserved_mem.h>
+#include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
 #include <linux/pm_domain.h>
 #include <linux/pm_runtime.h>
@@ -26,6 +29,7 @@
 #include <linux/soc/qcom/smem_state.h>
 #include <linux/soc/qcom/qcom_aoss.h>
 #include <trace/events/rproc_qcom.h>
+#include <soc/qcom/qcom_ramdump.h>
 
 #include "qcom_common.h"
 #include "qcom_pil_info.h"
@@ -64,6 +68,7 @@ struct adsp_data {
 
 struct qcom_adsp {
 	struct device *dev;
+	struct device *minidump_dev;
 	struct rproc *rproc;
 
 	struct qcom_q6v5 q6v5;
@@ -142,7 +147,7 @@ static void adsp_minidump(struct rproc *rproc)
 	if (rproc->dump_conf == RPROC_COREDUMP_DISABLED)
 		goto exit;
 
-	qcom_minidump(rproc, adsp->minidump_id, adsp_segment_dump);
+	qcom_minidump(rproc, adsp->minidump_dev, adsp->minidump_id, adsp_segment_dump);
 
 exit:
 	trace_rproc_qcom_event(dev_name(adsp->dev), "adsp_minidump", "exit");
@@ -688,6 +693,28 @@ static int adsp_alloc_memory_region(struct qcom_adsp *adsp)
 }
 
 
+static int adsp_setup_32b_dma_allocs(struct qcom_adsp *adsp)
+{
+	int ret;
+
+	if (!adsp->dma_phys_below_32b)
+		return 0;
+
+	ret = of_reserved_mem_device_init_by_idx(adsp->dev, adsp->dev->of_node, 1);
+	if (ret) {
+		dev_err(adsp->dev,
+			"Unable to get the CMA area for performing dma_alloc_* calls\n");
+		goto out;
+	}
+
+	ret = dma_set_mask_and_coherent(adsp->dev, DMA_BIT_MASK(32));
+	if (ret)
+		dev_err(adsp->dev, "Unable to set the coherent mask to 32-bits!\n");
+
+out:
+	return ret;
+}
+
 static int adsp_probe(struct platform_device *pdev)
 {
 	const struct adsp_data *desc;
@@ -695,6 +722,7 @@ static int adsp_probe(struct platform_device *pdev)
 	struct rproc *rproc;
 	const char *fw_name;
 	const struct rproc_ops *ops = &adsp_ops;
+	char md_dev_name[32];
 	int ret;
 
 	desc = of_device_get_match_data(&pdev->dev);
@@ -754,6 +782,10 @@ static int adsp_probe(struct platform_device *pdev)
 	if (ret)
 		goto deinit_wakeup_source;
 
+	ret = adsp_setup_32b_dma_allocs(adsp);
+	if (ret)
+		goto deinit_wakeup_source;
+
 	ret = adsp_init_clock(adsp);
 	if (ret)
 		goto deinit_wakeup_source;
@@ -803,12 +835,21 @@ static int adsp_probe(struct platform_device *pdev)
 	if (ret)
 		goto remove_subdevs;
 
+	snprintf(md_dev_name, ARRAY_SIZE(md_dev_name), "%s-md", pdev->dev.of_node->name);
+	adsp->minidump_dev = qcom_create_ramdump_device(md_dev_name, NULL);
+	if (!adsp->minidump_dev)
+		dev_err(&pdev->dev, "Unable to create %s minidump device.\n", md_dev_name);
+
 	ret = rproc_add(rproc);
 	if (ret)
-		goto remove_attr_txn_id;
+		goto destroy_minidump_dev;
 
 	return 0;
-remove_attr_txn_id:
+
+destroy_minidump_dev:
+	if (adsp->minidump_dev)
+		qcom_destroy_ramdump_device(adsp->minidump_dev);
+
 	device_remove_file(adsp->dev, &dev_attr_txn_id);
 remove_subdevs:
 	qcom_remove_sysmon_subdev(adsp->sysmon);
@@ -829,6 +870,8 @@ static int adsp_remove(struct platform_device *pdev)
 	struct qcom_adsp *adsp = platform_get_drvdata(pdev);
 
 	rproc_del(adsp->rproc);
+	if (adsp->minidump_dev)
+		qcom_destroy_ramdump_device(adsp->minidump_dev);
 	device_remove_file(adsp->dev, &dev_attr_txn_id);
 	qcom_remove_glink_subdev(adsp->rproc, &adsp->glink_subdev);
 	qcom_remove_sysmon_subdev(adsp->sysmon);
@@ -905,6 +948,20 @@ static const struct adsp_data waipio_adsp_resource = {
 };
 
 static const struct adsp_data neo_adsp_resource = {
+	.crash_reason_smem = 423,
+	.firmware_name = "adsp.mdt",
+	.pas_id = 1,
+	.minidump_id = 5,
+	.uses_elf64 = true,
+	.has_aggre2_clk = false,
+	.auto_boot = false,
+	.ssr_name = "lpass",
+	.sysmon_name = "adsp",
+	.qmp_name = "adsp",
+	.ssctl_id = 0x14,
+};
+
+static const struct adsp_data anorak_adsp_resource = {
 	.crash_reason_smem = 423,
 	.firmware_name = "adsp.mdt",
 	.pas_id = 1,
@@ -1052,6 +1109,19 @@ static const struct adsp_data neo_cdsp_resource = {
 	.ssctl_id = 0x17,
 };
 
+static const struct adsp_data anorak_cdsp_resource = {
+	.crash_reason_smem = 601,
+	.firmware_name = "cdsp.mdt",
+	.pas_id = 18,
+	.minidump_id = 7,
+	.uses_elf64 = true,
+	.has_aggre2_clk = false,
+	.auto_boot = false,
+	.ssr_name = "cdsp",
+	.sysmon_name = "cdsp",
+	.qmp_name = "cdsp",
+	.ssctl_id = 0x17,
+};
 
 static const struct adsp_data diwali_cdsp_resource = {
 	.crash_reason_smem = 601,
@@ -1340,6 +1410,8 @@ static const struct of_device_id adsp_of_match[] = {
 	{ .compatible = "qcom,neo-adsp-pas", .data = &neo_adsp_resource},
 	{ .compatible = "qcom,neo-cdsp-pas", .data = &neo_cdsp_resource},
 	{ .compatible = "qcom,neo-wpss-pas", .data = &neo_wpss_resource},
+	{ .compatible = "qcom,anorak-adsp-pas", .data = &anorak_adsp_resource},
+	{ .compatible = "qcom,anorak-cdsp-pas", .data = &anorak_cdsp_resource},
 	{ },
 };
 MODULE_DEVICE_TABLE(of, adsp_of_match);
