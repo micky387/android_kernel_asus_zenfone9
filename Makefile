@@ -1069,15 +1069,6 @@ ifneq (,$(filter AI2202,$(ASUS_BUILD_PROJECT)))
 KBUILD_CPPFLAGS += -DASUS_AI2202_PROJECT=1
 endif
 
-#ASUS_BUILD_NUMBER := $(BUILD_NUMBER_FROM_FILE)
-ASUS_BUILD_NUMBER := $(shell cat $(srctree)/../../out/soong/build_number.txt)
-$(warning ASUS_BUILD_NUMBER: $(ASUS_BUILD_NUMBER))
-ifneq ($(ASUS_BUILD_NUMBER),)
-       KBUILD_CPPFLAGS += -DASUS_SW_VER=\"$(ASUS_BUILD_NUMBER)\"
-else
-       KBUILD_CPPFLAGS += -DASUS_SW_VER=\"$(ASUS_BUILD_PROJECT)_ENG\"
-endif
-
 # ASUS_BSP --- Add ASUS build option to KBUILD_CPPFLAGS
 
 ifeq ($(CONFIG_STRIP_ASM_SYMS),y)
